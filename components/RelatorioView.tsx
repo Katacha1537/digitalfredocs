@@ -7,6 +7,7 @@ interface Props {
   nomeMedico: string;
   especialidade: string;
   dataAuditoria: string;
+  fontes?: { uri?: string; title?: string }[];
 }
 
 // ----------------------------------------------------------------------
