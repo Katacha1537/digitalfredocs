@@ -414,6 +414,7 @@ body {
   width: 900px;
   min-height: 1272px; /* ~ A4 ratio (900 x 1.414) */
   background: var(--paper);
+  color: var(--ink);
   page-break-after: always;
   padding: 75px; /* Margens 20mm */
   overflow: hidden;
