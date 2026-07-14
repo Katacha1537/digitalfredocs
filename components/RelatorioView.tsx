@@ -47,8 +47,8 @@ function markdownParaHTML(md: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Callouts (Blockquotes)
     .replace(/^> (.+)$/gm, '<div class="callout gold"><div class="callout-body">$1</div></div>')
-    // Listas
-    .replace(/^\- (.+)$/gm, '<li class="pdf-li">$1</li>')
+    // Listas (aceitando espaços no início e hífen ou asterisco)
+    .replace(/^\s*[\-\*]\s+(.+)$/gm, '<li class="pdf-li">$1</li>')
     // Tabelas
     .replace(/\|(.+)\|/gm, (match) => {
       const cells = match.split('|').filter(c => c.trim() && !c.match(/^[-\s|]+$/));
