@@ -249,12 +249,30 @@ DADOS COLETADOS NA WEB:
 ${dadosBrutosPesquisa}
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5.6-sol",
-      messages: [{ role: "user", content: instrucaoOpenAI }],
-    });
+    const modelosOpenAI = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-4o-mini'];
+    let relatorioFinal = '';
+    let openAISuccess = false;
+    let lastOpenAIError = null;
 
-    const relatorioFinal = completion.choices[0].message.content || "";
+    for (const openAIModel of modelosOpenAI) {
+      try {
+        console.log(`Tentando gerar relatório com modelo OpenAI: ${openAIModel}...`);
+        const completion = await openai.chat.completions.create({
+          model: openAIModel,
+          messages: [{ role: "user", content: instrucaoOpenAI }],
+        });
+        relatorioFinal = completion.choices[0].message.content || "";
+        openAISuccess = true;
+        break; // Funcionou, sai do loop
+      } catch (err: any) {
+        console.warn(`Erro no modelo OpenAI ${openAIModel}:`, err.message);
+        lastOpenAIError = err;
+      }
+    }
+
+    if (!openAISuccess) {
+      throw new Error(`A OpenAI está indisponível no momento ou a sua chave não tem permissão para os modelos padrão. Erro: ${lastOpenAIError?.message}`);
+    }
 
     return NextResponse.json({
       relatorio: relatorioFinal,
