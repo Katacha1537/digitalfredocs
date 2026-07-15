@@ -80,7 +80,10 @@ export async function POST(request: NextRequest) {
     const modelosGemini = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-2.0-pro-exp-02-05', 'gemini-1.5-flash'];
 
     // 1. Tentar Pesquisa via Serper.dev
-    if (process.env.SERPER_API_KEY) {
+    const rawSerperKey = process.env.SERPER_API_KEY;
+    const serperKey = rawSerperKey ? rawSerperKey.trim().replace(/^['"]|['"]$/g, '') : '';
+
+    if (serperKey) {
       try {
         console.log(`Iniciando busca com Serper.dev para: ${queryBusca}...`);
         const controller = new AbortController();
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest) {
         const serperRes = await fetch('https://google.serper.dev/search', {
           method: 'POST',
           headers: {
-            'X-API-KEY': process.env.SERPER_API_KEY,
+            'X-API-KEY': serperKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -103,7 +106,8 @@ export async function POST(request: NextRequest) {
         clearTimeout(timeoutId);
 
         if (!serperRes.ok) {
-          throw new Error(`Erro na API do Serper: Status ${serperRes.status}`);
+          const errText = await serperRes.text();
+          throw new Error(`Erro na API do Serper: Status ${serperRes.status} - ${errText}`);
         }
 
         const serperData = await serperRes.json();
@@ -179,7 +183,7 @@ ${dadosBrutosSerper}
         console.error('Falha no fluxo do Serper.dev, acionando fallback nativo do Gemini. Erro:', err.message);
       }
     } else {
-      console.log('SERPER_API_KEY não configurada. Usando busca nativa do Gemini diretamente.');
+      console.log('SERPER_API_KEY vazia ou inválida. Usando busca nativa do Gemini diretamente.');
     }
 
     // 2. Fallback: Usar busca nativa do Gemini (Search Grounding) se o Serper falhou ou não está configurado
