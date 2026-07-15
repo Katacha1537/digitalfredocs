@@ -134,13 +134,77 @@ export async function POST(request: NextRequest) {
           self.findIndex(t => t.uri === f.uri) === index
         );
 
+        // =========================================================================
+        // DEEP SEARCH: RASTEJAMENTO DO CONTEÚDO DOS SITES (JINA READER)
+        // =========================================================================
+        const blacklistDomains = ['instagram.com', 'facebook.com', 'twitter.com', 'linkedin.com', 'youtube.com', 'tiktok.com', 'pinterest.com'];
+        const urlsToCrawl: string[] = [];
+
+        // Adiciona o website dos resultados locais (Google Maps/Meu Negócio)
+        if (serperData.localResults) {
+          for (const local of serperData.localResults) {
+            if (local.website && !blacklistDomains.some(domain => local.website.includes(domain))) {
+              urlsToCrawl.push(local.website);
+            }
+          }
+        }
+
+        // Adiciona links orgânicos (Doctoralia, site próprio, diretórios)
+        if (serperData.organic) {
+          for (const item of serperData.organic) {
+            if (item.link && !urlsToCrawl.includes(item.link) && !blacklistDomains.some(domain => item.link.includes(domain))) {
+              urlsToCrawl.push(item.link);
+            }
+          }
+        }
+
+        // Limita a no máximo as 4 principais URLs exclusivas para o deep crawl
+        const urlsFinais = urlsToCrawl.slice(0, 4);
+        console.log(`Links selecionados para pesquisa profunda (Deep Search):`, urlsFinais);
+
+        let dadosDeepSearch = '';
+        if (urlsFinais.length > 0) {
+          try {
+            console.log(`Disparando rastejamento em paralelo com Jina Reader...`);
+            const crawledResults = await Promise.all(
+              urlsFinais.map(async (url) => {
+                try {
+                  console.log(`Rastejando conteúdo profundo de: ${url}...`);
+                  const controllerJina = new AbortController();
+                  const timeoutJina = setTimeout(() => controllerJina.abort(), 6000); // 6s timeout por página
+
+                  const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
+                    headers: { 'Accept': 'text/plain' },
+                    signal: controllerJina.signal,
+                  });
+                  clearTimeout(timeoutJina);
+
+                  if (jinaRes.ok) {
+                    const text = await jinaRes.text();
+                    // Limita a 5.000 caracteres para não sobrecarregar a janela de contexto da IA
+                    return `--- CONTEÚDO DO SITE: ${url} ---\n${text.substring(0, 5000)}\n`;
+                  } else {
+                    console.warn(`Jina Reader retornou status ${jinaRes.status} para: ${url}`);
+                  }
+                } catch (e: any) {
+                  console.warn(`Erro no rastejamento da URL ${url}:`, e.message);
+                }
+                return '';
+              })
+            );
+            dadosDeepSearch = crawledResults.filter(Boolean).join('\n\n');
+          } catch (e: any) {
+            console.error('Erro geral durante execução do Jina Reader:', e.message);
+          }
+        }
+
         // Compilar resultados com Gemini (sem a ferramenta de pesquisa local)
         const promptCompilacao = `Você é um pesquisador especialista em OSINT (Open Source Intelligence) focado em marketing e presença digital médica.
-Analise os resultados brutos da busca do Google abaixo e retorne um relatório super detalhado e consolidado de dados brutos sobre a presença online do médico.
+Analise os resultados brutos da busca do Google (snippets e conteúdo profundo extraído das páginas) abaixo e retorne um relatório super detalhado e consolidado de dados brutos sobre a presença online do médico.
 Foque em extrair links, dados de perfil, quantidade de avaliações, informações de contato (NAP), descrições de biografia, existência de site e serviços prestados.
 
 IMPORTANTE: 
-1. Não invente nenhuma informação. Apenas consolide o que está nos resultados.
+1. Não invente nenhuma informação. Apenas consolide o que está nos resultados e no conteúdo rastejado dos sites.
 2. Para evitar bloqueios de cópia (recitation), NÃO copie e cole parágrafos inteiros ou biografias exatas dos sites. Sempre RESUMA e PARAFRASEE as informações com as suas próprias palavras.
 
 MÉDICO A SER PESQUISADO:
@@ -151,8 +215,11 @@ MÉDICO A SER PESQUISADO:
 - Instagram: ${dados.instagram || 'Não informado'}
 - Clínica: ${dados.clinica || 'Não informado'}
 
-RESULTADOS BRUTOS DA PESQUISA NO GOOGLE:
+RESULTADOS BRUTOS DA PESQUISA NO GOOGLE (snippets):
 ${dadosBrutosSerper}
+
+CONTEÚDO DETALHADO EXTRAÍDO DAS PÁGINAS (Deep Search):
+${dadosDeepSearch || 'Nenhum conteúdo adicional pôde ser rastejado.'}
 `;
 
         let compilationResult;
